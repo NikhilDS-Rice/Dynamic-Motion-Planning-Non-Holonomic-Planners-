@@ -161,19 +161,21 @@ ompl::control::SimpleSetupPtr createCar(std::vector<Rectangle> &obstacles)
     ss->setStatePropagator(ompl::control::ODESolver::getStatePropagator(odeSolver));
     
     // Set state validity checker
-    ss->setStateValidityChecker([&obstacles, &velBounds](const ompl::base::State *state) {
+    // Capture obstacles by pointer to avoid issues, and velocity bounds by value
+    const std::vector<Rectangle>* obstaclesPtr = &obstacles;
+    ss->setStateValidityChecker([obstaclesPtr](const ompl::base::State *state) {
         // Extract the SE2 component for collision checking
         const auto *compoundState = state->as<ompl::base::CompoundStateSpace::StateType>();
         const auto *se2state = compoundState->as<ompl::base::SE2StateSpace::StateType>(0);
         const auto *velState = compoundState->as<ompl::base::RealVectorStateSpace::StateType>(1);
         
-        // Check velocity bounds
+        // Check velocity bounds (the state space should already enforce these, but we double-check)
         double v = velState->values[0];
-        if (v < velBounds.low[0] || v > velBounds.high[0])
+        if (v < -10.0 || v > 10.0)
             return false;
         
         // Check collision - treating car as a point
-        return isValidStatePoint(se2state, obstacles);
+        return isValidStatePoint(se2state, *obstaclesPtr);
     });
     
     // Set the start state

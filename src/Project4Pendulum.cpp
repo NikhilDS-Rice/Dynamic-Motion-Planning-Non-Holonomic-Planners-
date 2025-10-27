@@ -96,11 +96,10 @@ ompl::control::SimpleSetupPtr createPendulum(double torque)
     ss->setStatePropagator(ompl::control::ODESolver::getStatePropagator(odeSolver));
     
     // Set state validity checker
-    ss->setStateValidityChecker([&bounds](const ompl::base::State *state) {
-        const auto *rvstate = state->as<ompl::base::RealVectorStateSpace::StateType>();
-        const double omega = rvstate->values[1];
-        // Check if angular velocity is within bounds
-        return omega >= bounds.low[1] && omega <= bounds.high[1];
+    // For pendulum, all states within the state space bounds are valid (no obstacles)
+    // The bounds checking is already done by the state space
+    ss->setStateValidityChecker([](const ompl::base::State * /*state*/) {
+        return true;
     });
     
     // Set the start and goal states

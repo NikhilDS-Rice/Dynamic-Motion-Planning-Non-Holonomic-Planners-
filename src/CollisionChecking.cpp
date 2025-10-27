@@ -247,3 +247,22 @@ bool isValidSquare(double x, double y, double theta, double sideLength, const st
     }
     return true;
 }
+
+// Wrapper function for point robot state validity checking
+bool isValidStatePoint(const ompl::base::State* state, const std::vector<Rectangle>& obstacles)
+{
+    const auto *se2state = state->as<ompl::base::SE2StateSpace::StateType>();
+    double x = se2state->getX();
+    double y = se2state->getY();
+    return isValidPoint(x, y, obstacles);
+}
+
+// Wrapper function for square robot state validity checking
+bool isValidStateSquare(const ompl::base::State* state, double sideLen, const std::vector<Rectangle>& obstacles)
+{
+    const auto *se2state = state->as<ompl::base::SE2StateSpace::StateType>();
+    double x = se2state->getX();
+    double y = se2state->getY();
+    double theta = se2state->getYaw();
+    return isValidSquare(x, y, theta, sideLen, obstacles);
+}
