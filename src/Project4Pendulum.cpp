@@ -121,22 +121,27 @@ ompl::control::SimpleSetupPtr createPendulum(double torque)
 
 void planPendulum(ompl::control::SimpleSetupPtr &ss, int choice)
 {
+    std::string plannerName;
+    
     // Set the planner based on user choice
     if (choice == 1)  // RRT
     {
         auto planner = std::make_shared<ompl::control::RRT>(ss->getSpaceInformation());
         ss->setPlanner(planner);
+        plannerName = "rrt";
         std::cout << "Using RRT planner" << std::endl;
     }
     else if (choice == 2)  // KPIECE1
     {
         auto planner = std::make_shared<ompl::control::KPIECE1>(ss->getSpaceInformation());
         ss->setPlanner(planner);
+        plannerName = "kpiece";
         std::cout << "Using KPIECE1 planner" << std::endl;
     }
     else if (choice == 3)  // RG-RRT
     {
         // TODO: Implement RG-RRT later
+        plannerName = "rgrrt";
         std::cout << "RG-RRT not yet implemented" << std::endl;
         return;
     }
@@ -152,12 +157,13 @@ void planPendulum(ompl::control::SimpleSetupPtr &ss, int choice)
         // Print the path to screen
         ss->getSolutionPath().printAsMatrix(std::cout);
         
-        // Save the solution path to a file
-        std::ofstream fout("pendulum_path.txt");
+        // Save the solution path to a file with unique name
+        std::string filename = "output/pendulum_" + plannerName + "_path.txt";
+        std::ofstream fout(filename);
         ss->getSolutionPath().printAsMatrix(fout);
         fout.close();
         
-        std::cout << "Solution saved to pendulum_path.txt" << std::endl;
+        std::cout << "Solution saved to " << filename << std::endl;
     }
     else
     {
