@@ -212,20 +212,6 @@ ompl::control::SimpleSetupPtr createCar(std::vector<Rectangle>& obstacles)
     return ss;
 }
 
-static void extractCarCSV(const oc::SimpleSetupPtr &ss, const std::string &fname, unsigned int interpolateN = 600) {
-    auto gpath = ss->getSolutionPath().asGeometric();
-    if (interpolateN > gpath.getStateCount())
-        gpath.interpolate(interpolateN);
-
-    std::ofstream out(fname);
-    out << "x,y,theta,v\n";
-    for (std::size_t i = 0; i < gpath.getStateCount(); ++i) {
-        const auto *cs   = gpath.getState(i)->as<ob::CompoundState>();
-        const auto *se2  = cs->as<ob::SE2StateSpace::StateType>(0);
-        const auto *vSt  = cs->as<ob::RealVectorStateSpace::StateType>(1);
-        out << se2->getX() << "," << se2->getY() << "," << se2->getYaw() << "," << vSt->values[0] << "\n";
-    }
-}
 
 void planCar(ompl::control::SimpleSetupPtr & ss , int choice)
 {
