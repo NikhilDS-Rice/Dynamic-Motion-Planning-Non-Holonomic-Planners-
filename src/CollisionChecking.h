@@ -35,3 +35,5 @@ bool isValidStatePoint(const ompl::base::State* state, const std::vector<Rectang
 
 // Tests if state is valid (for a square robot)
 bool isValidStateSquare(const ompl::base::State* state, double sideLen, const std::vector<Rectangle>& obstacles);
+
+bool isValidSquare(double x, double y, double theta, double sideLen,const std::vector<Rectangle>& obstacles);
