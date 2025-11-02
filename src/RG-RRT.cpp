@@ -12,6 +12,7 @@
 #include <ompl/base/goals/GoalSampleableRegion.h>
 #include <limits>
 #include <iostream>
+#include <ompl/control/spaces/RealVectorControlSpace.h>
 
 using namespace ompl;
 using namespace ompl::control;
@@ -44,21 +45,26 @@ void RG_RRT::computeReachableSet(Motion *m) {
         base::State *r = si_->allocState();
         si_->propagate(m->state, u, deltaT_, r);
 
-        if (si_->isValid(r))
+        if (si_->isValid(r)){
             m->reachable.push_back(r);
+            m->reachCtrls.push_back(u);
+        }
     }
 }
 
-bool RG_RRT::isReachableCloser(const Motion *m, const base::State *qrand, base::State *&x_r_near) {
-    double d_near = si_->distance(m->state, qrand);
+bool RG_RRT::isReachableCloser(const Motion *m, const base::State *qrand,std::size_t &bestIdx ,base::State *&x_r_near) {
+    
+    const double d_near = si_->distance(m->state, qrand);
     double best = d_near;
     x_r_near = nullptr;
+    bestIdx = std::size_t(-1);
 
-    for (auto *r : m->reachable) {
-        double d = si_->distance(r, qrand);
+    for (std::size_t i = 0; i < m->reachable.size(); ++i) {
+        double d = si_->distance(m->reachable[i], qrand);
         if (d < best) {
             best = d;
-            x_r_near = r;
+            bestIdx = i;
+            x_r_near = m->reachable[i];
         }
     }
     return x_r_near != nullptr;
@@ -93,26 +99,34 @@ base::PlannerStatus RG_RRT::solve(const base::PlannerTerminationCondition &ptc) 
         if (!nearest) continue;
 
         // Discard sample if unreachable
-        if (!isReachableCloser(nearest, qrand, x_r_near)) continue;
+        std::size_t idx = std::size_t(-1);
+        if (!isReachableCloser(nearest, qrand, idx, x_r_near)) continue;
 
         auto *newMotion = new Motion(si_);
         si_->copyState(newMotion->state, x_r_near);
         newMotion->parent = nearest;
+
+        si_->copyControl(newMotion->control, nearest->reachCtrls[idx]);
+        newMotion->duration = deltaT_;
+
         computeReachableSet(newMotion);
         tree.push_back(newMotion);
 
         if (goal_->isSatisfied(newMotion->state)) {
             std::cout << "Goal reached!" << std::endl;
-            // Construct path
-            std::vector<base::State *> path;
-            for (Motion *m = newMotion; m; m = m->parent)
-                path.push_back(m->state);
+            std::vector<Motion *> mpath;
+            for (Motion *m = newMotion; m; m = m->parent) mpath.push_back(m);
+            std::reverse(mpath.begin(), mpath.end());
 
-            std::reverse(path.begin(), path.end());
-            auto pathObj = std::make_shared<PathControl>(si_);
-            for (size_t i = 0; i + 1 < path.size(); ++i)
-                pathObj->append(path[i], path[i + 1], deltaT_);
-            pdef_->addSolutionPath(base::PathPtr(pathObj), false, 0.0, getName());
+            auto path = std::make_shared<PathControl>(si_);
+            // first state
+            path->append(mpath.front()->state);
+            // edges: use the child's control/duration (edge from parent -> child)
+            for (std::size_t i = 1; i < mpath.size(); ++i) {
+                path->append(mpath[i]->state, mpath[i]->control, mpath[i]->duration);
+            }
+
+            pdef_->addSolutionPath(base::PathPtr(path), false, 0.0, getName());
             return base::PlannerStatus::EXACT_SOLUTION;
         }
     }

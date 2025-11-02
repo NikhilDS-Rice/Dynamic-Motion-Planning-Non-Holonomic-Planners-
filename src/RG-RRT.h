@@ -10,6 +10,7 @@
 #include <ompl/control/PathControl.h>
 #include <ompl/base/goals/GoalSampleableRegion.h>
 #include <ompl/base/spaces/RealVectorStateSpace.h>
+#include <ompl/control/spaces/RealVectorControlSpace.h> 
 
 #ifndef RGRRT_H
 #define RGRRT_H
@@ -37,14 +38,15 @@ namespace ompl
                     std::vector<base::State *> reachable;  // reachable set R(q)
                     Control *control;
                     double duration;
-            
+                    std::vector<ompl::control::Control *> reachCtrls;
+
                     Motion(const SpaceInformationPtr &si) : state(si->allocState()), parent(nullptr), control(si->allocControl()), duration(0.0) {}
                     ~Motion() = default;
                 };
             
                 // Helper functions
                 void computeReachableSet(Motion *m);
-                bool isReachableCloser(const Motion *m, const base::State *qrand, base::State *&x_r_near);
+                bool isReachableCloser(const Motion *m,const ompl::base::State *qrand,std::size_t &bestIdx,ompl::base::State *&x_r_near);
             
                 SpaceInformationPtr si_;
                 base::StateSamplerPtr sampler_;

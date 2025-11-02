@@ -138,13 +138,11 @@ void planPendulum(ompl::control::SimpleSetupPtr &ss, int choice)
         plannerName = "kpiece";
         std::cout << "Using KPIECE1 planner" << std::endl;
     }
-    else if (choice == 3)  // RG-RRT
-    {
-        // TODO: Implement RG-RRT later
+    else if (choice == 3) {
+        auto planner = std::make_shared<ompl::control::RG_RRT>(ss->getSpaceInformation());
         plannerName = "rgrrt";
-        std::cout << "RG-RRT not yet implemented" << std::endl;
-        return;
-    }
+        std::cout << "Using RG-RRT planner" << std::endl;
+    }    
     
     // Attempt to solve the problem within 30 seconds
     ss->setup();
@@ -180,7 +178,7 @@ void benchmarkPendulum(ompl::control::SimpleSetupPtr &ss)
     b.addPlanner(std::make_shared<ompl::control::RRT>(ss->getSpaceInformation()));
     b.addPlanner(std::make_shared<ompl::control::KPIECE1>(ss->getSpaceInformation()));
     // TODO: Add RG-RRT when implemented
-    // b.addPlanner(std::make_shared<ompl::control::RGRRT>(ss->getSpaceInformation()));
+    b.addPlanner(std::make_shared<ompl::control::RG_RRT>(ss->getSpaceInformation()));
     
     // Set benchmark parameters
     ompl::tools::Benchmark::Request req;
