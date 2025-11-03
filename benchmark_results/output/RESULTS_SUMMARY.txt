@@ -1,0 +1,60 @@
+COMPREHENSIVE TEST RESULTS
+===========================
+
+PENDULUM RESULTS:
+-----------------
+1. RRT with Torque=3:
+   - Time: 0.103 seconds
+   - States: 696
+   - File: output/pendulum_rrt_path.txt (overwritten by later tests)
+
+2. KPIECE1 with Torque=3:
+   - Time: 30.036 seconds
+   - States: 408,846 states in 169,278 cells
+   - File: output/pendulum_kpiece_path.txt
+   - Much more exhaustive exploration than RRT
+
+3. RRT with Torque=5:
+   - Time: 3.900 seconds
+   - States: 18,160
+   - File: output/pendulum_rrt_path.txt (overwritten by torque=10)
+
+4. RRT with Torque=10:
+   - Time: 3.879 seconds
+   - States: 11,641
+   - File: output/pendulum_rrt_path.txt (final)
+
+OBSERVATIONS - Pendulum:
+- Higher torque does NOT always mean faster (torque=3: 0.1s, torque=10: 3.9s)
+- This is because higher torque allows larger accelerations, making exploration harder
+- KPIECE1 is much slower but more systematic
+- All planners successfully found solutions
+
+CAR RESULTS:
+------------
+5. RRT:
+   - Time: 0.165 seconds
+   - States: 87
+   - File: output/car_rrt_path.txt
+   - Very fast solution
+
+6. KPIECE1:
+   - Time: 0.036 seconds
+   - States: 96 states in 92 cells
+   - File: output/car_kpiece_path.txt
+   - Even faster than RRT for this problem!
+
+OBSERVATIONS - Car:
+- Both planners very fast (<0.2s)
+- KPIECE1 slightly more efficient
+- Environment is relatively open with few obstacles
+- Both respect non-holonomic constraints
+
+FILES GENERATED:
+----------------
+ output/pendulum_rrt_path.txt (torque=10)
+ output/pendulum_kpiece_path.txt (torque=3)
+ output/car_rrt_path.txt
+ output/car_kpiece_path.txt
+
+CHECKPOINT STATUS:  COMPLETE

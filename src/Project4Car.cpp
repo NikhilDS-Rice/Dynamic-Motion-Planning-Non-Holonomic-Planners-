@@ -21,6 +21,7 @@
 #include <ompl/control/StatePropagator.h>
 #include <ompl/control/planners/rrt/RRT.h>
 #include <ompl/control/planners/kpiece/KPIECE1.h>
+#include <ompl/tools/benchmark/Benchmark.h>
 
 // The collision checker routines
 #include "CollisionChecking.h"
@@ -227,10 +228,17 @@ void planCar(ompl::control::SimpleSetupPtr & ss , int choice)
         planner = std::make_shared<oc::KPIECE1>(ss->getSpaceInformation());
         plannerName = "kpiece";
     } 
-    // else if (choice == 3)  planner = std::make_shared<oc::RG_RRT>(ss->getSpaceInformation());
+    else if (choice == 3) {
+        auto rgrrtPlanner = std::make_shared<oc::RGRRT>(ss->getSpaceInformation());
+        // Set parameters for RG-RRT
+        rgrrtPlanner->setNumControlSamples(11);  // 11 evenly spaced values for first control dimension
+        rgrrtPlanner->setReachabilityDuration(0.05);  // Small time step for reachability
+        planner = rgrrtPlanner;
+        plannerName = "rgrrt";
+    }
 
     ss->setPlanner(planner);
-    if (ss->solve(5.0)) {
+    if (ss->solve(300.0)) {  // 300 seconds timeout for complex car problem
         std::cout << "Found solution:" << std::endl;
         
         // Print the path to screen
@@ -249,9 +257,34 @@ void planCar(ompl::control::SimpleSetupPtr & ss , int choice)
 }
 
 
-void benchmarkCar(ompl::control::SimpleSetupPtr &/* ss */)
+void benchmarkCar(ompl::control::SimpleSetupPtr &ss)
 {
-    // TODO: Do some benchmarking for the car
+    // Create benchmark object
+    ompl::tools::Benchmark b(*ss, "Car Benchmark");
+    
+    // Add planners to benchmark
+    b.addPlanner(std::make_shared<ompl::control::RRT>(ss->getSpaceInformation()));
+    b.addPlanner(std::make_shared<ompl::control::KPIECE1>(ss->getSpaceInformation()));
+    
+    // Add RG-RRT with parameters
+    auto rgrrt = std::make_shared<ompl::control::RGRRT>(ss->getSpaceInformation());
+    rgrrt->setNumControlSamples(11);
+    rgrrt->setReachabilityDuration(0.05);
+    b.addPlanner(rgrrt);
+    
+    // Set benchmark parameters
+    ompl::tools::Benchmark::Request req;
+    req.maxTime = 300.0;  // 5 minutes for car (more complex problem)
+    req.maxMem = 1000.0;
+    req.runCount = 20;
+    req.displayProgress = true;
+    
+    // Run the benchmark
+    b.benchmark(req);
+    
+    // Save results
+    b.saveResultsToFile("car_benchmark.log");
+    std::cout << "Benchmark results saved to car_benchmark.log" << std::endl;
 }
 
 int main(int  argc , char ** argv )

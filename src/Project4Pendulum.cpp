@@ -140,10 +140,13 @@ void planPendulum(ompl::control::SimpleSetupPtr &ss, int choice)
     }
     else if (choice == 3)  // RG-RRT
     {
-        // TODO: Implement RG-RRT later
+        auto planner = std::make_shared<ompl::control::RGRRT>(ss->getSpaceInformation());
+        // Set parameters for RG-RRT
+        planner->setNumControlSamples(11);  // 11 evenly spaced torque values
+        planner->setReachabilityDuration(0.05);  // Small time step for reachability
+        ss->setPlanner(planner);
         plannerName = "rgrrt";
-        std::cout << "RG-RRT not yet implemented" << std::endl;
-        return;
+        std::cout << "Using RG-RRT planner" << std::endl;
     }
     
     // Attempt to solve the problem within 30 seconds
@@ -171,7 +174,7 @@ void planPendulum(ompl::control::SimpleSetupPtr &ss, int choice)
     }
 }
 
-void benchmarkPendulum(ompl::control::SimpleSetupPtr &ss)
+void benchmarkPendulum(ompl::control::SimpleSetupPtr &ss, const std::string& logFilename = "pendulum_benchmark.log")
 {
     // Create benchmark object
     ompl::tools::Benchmark b(*ss, "Pendulum Benchmark");
@@ -179,8 +182,12 @@ void benchmarkPendulum(ompl::control::SimpleSetupPtr &ss)
     // Add planners to benchmark
     b.addPlanner(std::make_shared<ompl::control::RRT>(ss->getSpaceInformation()));
     b.addPlanner(std::make_shared<ompl::control::KPIECE1>(ss->getSpaceInformation()));
-    // TODO: Add RG-RRT when implemented
-    // b.addPlanner(std::make_shared<ompl::control::RGRRT>(ss->getSpaceInformation()));
+    
+    // Add RG-RRT with parameters
+    auto rgrrt = std::make_shared<ompl::control::RGRRT>(ss->getSpaceInformation());
+    rgrrt->setNumControlSamples(11);
+    rgrrt->setReachabilityDuration(0.05);
+    b.addPlanner(rgrrt);
     
     // Set benchmark parameters
     ompl::tools::Benchmark::Request req;
@@ -193,8 +200,8 @@ void benchmarkPendulum(ompl::control::SimpleSetupPtr &ss)
     b.benchmark(req);
     
     // Save results
-    b.saveResultsToFile("pendulum_benchmark.log");
-    std::cout << "Benchmark results saved to pendulum_benchmark.log" << std::endl;
+    b.saveResultsToFile(logFilename.c_str());
+    std::cout << "Benchmark results saved to " << logFilename << std::endl;
 }
 
 int main(int /* argc */, char ** /* argv */)
@@ -243,7 +250,10 @@ int main(int /* argc */, char ** /* argv */)
     }
     // Benchmarking
     else if (choice == 2)
-        benchmarkPendulum(ss);
+    {
+        std::string logFilename = "pendulum_benchmark_torque" + std::to_string((int)torque) + ".log";
+        benchmarkPendulum(ss, logFilename);
+    }
 
     else
         std::cerr << "How did you get here? Invalid choice." << std::endl;
