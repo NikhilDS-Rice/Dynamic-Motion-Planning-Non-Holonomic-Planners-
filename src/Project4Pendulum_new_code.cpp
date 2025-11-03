@@ -16,6 +16,8 @@
 #include <ompl/control/spaces/RealVectorControlSpace.h>
 #include <ompl/control/planners/rrt/RRT.h>
 #include <ompl/control/planners/kpiece/KPIECE1.h>
+#include <ompl/base/spaces/SO2StateSpace.h>
+#include <ompl/base/StateSpace.h>
 
 // Benchmarking
 #include <ompl/tools/benchmark/Benchmark.h>
@@ -39,10 +41,12 @@ public:
 
     void project(const ompl::base::State *state, Eigen::Ref<Eigen::VectorXd> projection) const override
     {
-        // Project onto (theta, omega) - which is already our state space
-        const auto *rvstate = state->as<ompl::base::RealVectorStateSpace::StateType>();
-        projection(0) = rvstate->values[0]; // theta
-        projection(1) = rvstate->values[1]; // omega
+        const auto *cs   = state->as<ompl::base::CompoundState>();
+        const auto *th   = cs->as<ompl::base::SO2StateSpace::StateType>(0);
+        const auto *wvec = cs->as<ompl::base::RealVectorStateSpace::StateType>(1);
+    
+        projection(0) = th->value;        // theta in [-pi, pi), wraps naturally
+        projection(1) = wvec->values[0];  // omega
     }
 };
 
@@ -68,54 +72,55 @@ void pendulumODE(const ompl::control::ODESolver::StateType &q, const ompl::contr
 
 ompl::control::SimpleSetupPtr createPendulum(double torque)
 {
-    // Create the state space: 2D (theta, omega)
-    auto space = std::make_shared<ompl::base::RealVectorStateSpace>(2);
-    
-    // Set bounds for the state space
-    ompl::base::RealVectorBounds bounds(2);
-    bounds.setLow(0, -M_PI);      // theta lower bound
-    bounds.setHigh(0, M_PI);      // theta upper bound
-    bounds.setLow(1, -10);        // omega lower bound (angular velocity)
-    bounds.setHigh(1, 10);        // omega upper bound
-    space->setBounds(bounds);
-    
-    // Create the control space: 1D (torque)
-    auto cspace = std::make_shared<ompl::control::RealVectorControlSpace>(space, 1);
-    
-    // Set bounds for the control space
-    ompl::base::RealVectorBounds cbounds(1);
-    cbounds.setLow(-torque);
-    cbounds.setHigh(torque);
-    cspace->setBounds(cbounds);
-    
-    // Create SimpleSetup
-    auto ss = std::make_shared<ompl::control::SimpleSetup>(cspace);
-    
-    // Set the ODE solver
-    auto odeSolver = std::make_shared<ompl::control::ODEBasicSolver<>>(ss->getSpaceInformation(), &pendulumODE);
-    ss->setStatePropagator(ompl::control::ODESolver::getStatePropagator(odeSolver));
-    
-    // Set state validity checker
-    // For pendulum, all states within the state space bounds are valid (no obstacles)
-    // The bounds checking is already done by the state space
-    ss->setStateValidityChecker([](const ompl::base::State * /*state*/) {
-        return true;
-    });
-    
-    // Set the start and goal states
-    ompl::base::ScopedState<> start(space);
-    start[0] = -M_PI / 2.0;  // theta = -pi/2 (hanging down)
-    start[1] = 0.0;           // omega = 0 (at rest)
-    
-    ompl::base::ScopedState<> goal(space);
-    goal[0] = M_PI / 2.0;    // theta = pi/2 (pointing up)
-    goal[1] = 0.0;            // omega = 0 (at rest)
-    
-    ss->setStartAndGoalStates(start, goal, 0.05);  // 0.05 is the goal radius tolerance
-    
-    // Register the projection
+    namespace ob = ompl::base;
+    namespace oc = ompl::control;
+
+    // --- State space: SO2 (theta) × R^1 (omega) ---
+    auto so2   = std::make_shared<ob::SO2StateSpace>();             // wraps angle
+    auto wspace= std::make_shared<ob::RealVectorStateSpace>(1);     // omega
+    ob::RealVectorBounds wBounds(1);
+    wBounds.setLow(0, -10.0);
+    wBounds.setHigh(0,  10.0);
+    wspace->setBounds(wBounds);
+
+    auto space = std::make_shared<ob::CompoundStateSpace>();
+    space->addSubspace(so2,   1.0);
+    space->addSubspace(wspace,1.0);
+    space->lock();
+
+    // --- Control space: 1D torque u ∈ [-torque, torque] ---
+    auto cspace = std::make_shared<oc::RealVectorControlSpace>(space, 1);
+    ob::RealVectorBounds uBounds(1);
+    uBounds.setLow (0, -torque);
+    uBounds.setHigh(0,  torque);
+    cspace->setBounds(uBounds);
+
+    // --- SimpleSetup + ODE propagator ---
+    auto ss = std::make_shared<oc::SimpleSetup>(cspace);
+    auto si = ss->getSpaceInformation();
+    auto odeSolver = std::make_shared<oc::ODEBasicSolver<>>(si, &pendulumODE);
+    si->setStatePropagator(oc::ODESolver::getStatePropagator(odeSolver));
+
+    // Tune control duration & integration step (important for KPIECE)
+    si->setMinMaxControlDuration(1, 50);   // apply each control for 1..50 steps
+    si->setPropagationStepSize(0.015);     // 15 ms per integration step
+
+    // Pendulum has no obstacles: all states within bounds are valid
+    ss->setStateValidityChecker([](const ob::State*){ return true; });
+
+    // --- Start / Goal ---
+    ob::ScopedState<> start(space), goal(space);
+    start[0] = -M_PI/2.0;  // theta
+    start[1] = 0.0;        // omega
+    goal[0]  =  M_PI/2.0;  // theta
+    goal[1]  =  0.0;       // omega
+
+    // Loosen goal radius (was 0.05 and too strict for τ=3)
+    ss->setStartAndGoalStates(start, goal, 0.35);
+
+    // KPIECE needs a projection; keep your 2D (theta,omega) projection
     space->registerDefaultProjection(std::make_shared<PendulumProjection>(space.get()));
-    
+
     return ss;
 }
 
@@ -134,13 +139,9 @@ void planPendulum(ompl::control::SimpleSetupPtr &ss, int choice)
     else if (choice == 2)  // KPIECE1
     {
         auto planner = std::make_shared<ompl::control::KPIECE1>(ss->getSpaceInformation());
-        // Moderate tuning - balance between exploration and goal-directedness
-        planner->setGoalBias(0.3);  // Moderate goal bias (between default 0.05 and extreme 0.8)
-        planner->setBorderFraction(0.6);  // Balanced exploration
-        planner->setMaxCloseSamplesCount(15);  // Reasonable local sampling
         ss->setPlanner(planner);
         plannerName = "kpiece";
-        std::cout << "Using KPIECE1 planner (moderately tuned)" << std::endl;
+        std::cout << "Using KPIECE1 planner" << std::endl;
     }
     else if (choice == 3)  // RG-RRT
     {
@@ -185,12 +186,7 @@ void benchmarkPendulum(ompl::control::SimpleSetupPtr &ss, const std::string& log
     
     // Add planners to benchmark
     b.addPlanner(std::make_shared<ompl::control::RRT>(ss->getSpaceInformation()));
-    
-    // Add KPIECE1 with moderate tuning
     auto kpiece = std::make_shared<ompl::control::KPIECE1>(ss->getSpaceInformation());
-    kpiece->setGoalBias(0.3);  // Moderate goal bias
-    kpiece->setBorderFraction(0.6);  // Balanced exploration
-    kpiece->setMaxCloseSamplesCount(15);  // Reasonable local sampling
     b.addPlanner(kpiece);
     
     // Add RG-RRT with parameters
@@ -201,9 +197,9 @@ void benchmarkPendulum(ompl::control::SimpleSetupPtr &ss, const std::string& log
     
     // Set benchmark parameters
     ompl::tools::Benchmark::Request req;
-    req.maxTime = 60.0;  // Moderate 60 seconds timeout
-    req.maxMem = 1000.0;
-    req.runCount = 20;
+    req.maxTime = 30.0;
+    req.maxMem = 2000.0;
+    req.runCount = 50;
     req.displayProgress = true;
     
     // Run the benchmark
