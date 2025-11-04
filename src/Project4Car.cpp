@@ -14,6 +14,7 @@
 #include <ompl/base/SpaceInformation.h>
 #include <ompl/base/ScopedState.h>
 #include <ompl/base/ProjectionEvaluator.h>
+#include <ompl/base/goals/GoalRegion.h>
 
 #include <ompl/control/SimpleSetup.h>
 #include <ompl/control/ODESolver.h>
@@ -33,6 +34,46 @@ namespace ob = ompl::base;
 namespace oc = ompl::control;
 
 constexpr double CAR_SIZE = 1.5; 
+
+// Custom Goal Region that uses TRUE Euclidean distance (not normalized)
+class CarGoalRegion : public ob::GoalRegion
+{
+public:
+    CarGoalRegion(const ob::SpaceInformationPtr &si, double x, double y, double theta, double v, double tolerance)
+        : ob::GoalRegion(si), goalX_(x), goalY_(y), goalTheta_(theta), goalV_(v)
+    {
+        setThreshold(tolerance);
+    }
+
+    double distanceGoal(const ob::State *state) const override
+    {
+        const auto *cs = state->as<ob::CompoundState>();
+        const auto *se2 = cs->as<ob::SE2StateSpace::StateType>(0);
+        const auto *vvec = cs->as<ob::RealVectorStateSpace::StateType>(1);
+        
+        double x = se2->getX();
+        double y = se2->getY();
+        double theta = se2->getYaw();
+        double v = vvec->values[0];
+        
+        // TRUE EUCLIDEAN DISTANCE in physical space (not normalized!)
+        double dx = x - goalX_;
+        double dy = y - goalY_;
+        double spatialDist = std::sqrt(dx*dx + dy*dy);
+        
+        // For orientation, compute shortest angular distance
+        double dtheta = std::abs(theta - goalTheta_);
+        while (dtheta > M_PI) dtheta -= 2.0 * M_PI;
+        dtheta = std::abs(dtheta);
+        
+        // Return spatial distance as primary metric
+        // (we care most about reaching the position)
+        return spatialDist;
+    }
+
+private:
+    double goalX_, goalY_, goalTheta_, goalV_;
+}; 
 
 // Your projection for the car
 class CarProjection : public ompl::base::ProjectionEvaluator
@@ -172,8 +213,10 @@ ompl::control::SimpleSetupPtr createCar(std::vector<Rectangle>& obstacles)
     vspace->setBounds(vBounds);
 
     auto space = std::make_shared<ob::CompoundStateSpace>();
-    space->addSubspace(se2, 1.0);
-    space->addSubspace(vspace, 1.0);  // Equal weight like pendulum
+    // FIX: Increase SE2 weight to prioritize spatial convergence
+    // SE2 distance gets normalized by bounds (100 units), so we need higher weight
+    space->addSubspace(se2, 10.0);    // Higher weight for position/orientation
+    space->addSubspace(vspace, 0.5);  // Lower weight for velocity
     space->lock();
 
     // --- Control space: [omega, accel] ---
@@ -201,12 +244,19 @@ ompl::control::SimpleSetupPtr createCar(std::vector<Rectangle>& obstacles)
     ss->setStateValidityChecker(std::make_shared<CarValidityChecker>(si, obstacles, CAR_SIZE));
 
     // --- Start / Goal states ---
-    ob::ScopedState<> start(space), goal(space);
+    ob::ScopedState<> start(space);
     start[0] = -40.0; start[1] = -40.0; start[2] = 0.0; start[3] = 0.0;
-    goal[0]  =  40.0; goal[1]  =  40.0; goal[2]  = 0.0; goal[3]  = 0.0;
-
-    // Increase goal tolerance for better success
-    ss->setStartAndGoalStates(start, goal, 3.0);
+    
+    // Goal position
+    double goalX = 40.0, goalY = 40.0, goalTheta = 0.0, goalV = 0.0;
+    
+    // Use CUSTOM goal region with TRUE Euclidean distance, tolerance = 3.0
+    auto goalRegion = std::make_shared<CarGoalRegion>(si, goalX, goalY, goalTheta, goalV, 3.0);
+    
+    ss->setStartState(start);
+    ss->setGoal(goalRegion);
+    
+    std::cout << "Goal tolerance set to 3.0 meters (true Euclidean distance)" << std::endl;
 
     // Projection for KPIECE (register AFTER everything else is set up!)
     space->registerDefaultProjection(std::make_shared<CarProjection>(space.get()));
@@ -243,10 +293,39 @@ void planCar(ompl::control::SimpleSetupPtr & ss , int choice)
     ss->setPlanner(planner);
     ss->setup();
     
-    ob::PlannerStatus solved = ss->solve(60.0);  // Reduced to 60 seconds - should solve much faster now
+    // Set termination condition - only stop when goal is reached or timeout
+    std::cout << "Starting planning with " << (choice == 2 ? "120" : "60") << " second timeout..." << std::endl;
+    std::cout << "Planner will NOT terminate until goal (within 3.0m) is reached or timeout expires." << std::endl;
+    
+    // Increase timeout for KPIECE1 which may need more time with fixed weights
+    double timeout = (choice == 2) ? 120.0 : 60.0;  // 120s for KPIECE1, 60s for others
+    ob::PlannerStatus solved = ss->solve(timeout);
     
     if (solved) {
-        std::cout << "Found solution:" << std::endl;
+        std::cout << "\n=== SOLUTION FOUND ===" << std::endl;
+        
+        // Get the final state and check distance to goal
+        oc::PathControl &path = ss->getSolutionPath();
+        std::vector<ob::State*> &states = path.getStates();
+        const ob::State* finalState = states.back();
+        
+        const auto *cs = finalState->as<ob::CompoundState>();
+        const auto *se2 = cs->as<ob::SE2StateSpace::StateType>(0);
+        const auto *vvec = cs->as<ob::RealVectorStateSpace::StateType>(1);
+        
+        double finalX = se2->getX();
+        double finalY = se2->getY();
+        double finalTheta = se2->getYaw();
+        double finalV = vvec->values[0];
+        
+        double distToGoal = std::sqrt(std::pow(finalX - 40.0, 2) + std::pow(finalY - 40.0, 2));
+        
+        std::cout << "Final state: (" << finalX << ", " << finalY << ", " 
+                  << finalTheta << " rad, " << finalV << " m/s)" << std::endl;
+        std::cout << "Euclidean distance to goal (40, 40): " << distToGoal << " meters" << std::endl;
+        std::cout << "Within tolerance (3.0m)? " << (distToGoal <= 3.0 ? "YES ✓" : "NO ✗") << std::endl;
+        
+        std::cout << "\nFound solution:" << std::endl;
         ss->getSolutionPath().printAsMatrix(std::cout);
         
         std::string filename = "output/car_" + plannerName + "_path.txt";
