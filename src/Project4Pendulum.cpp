@@ -109,6 +109,7 @@ ompl::control::SimpleSetupPtr createPendulum(double torque)
     ss->setStateValidityChecker([si = ss->getSpaceInformation()](const ob::State* s){
         const auto* cs = s->as<ob::CompoundState>();
         const auto* w  = cs->as<ob::RealVectorStateSpace::StateType>(1);
+        // enforce |omega| <= 10 (matches state-space bounds from the PDF)
         return std::abs(w->values[0]) <= 10.0 && si->satisfiesBounds(s);
     });
 
@@ -187,14 +188,15 @@ void benchmarkPendulum(ompl::control::SimpleSetupPtr &ss, const std::string& log
 {
     // Create benchmark object
     ompl::tools::Benchmark b(*ss, "Pendulum Benchmark");
+    auto si = ss->getSpaceInformation();
     
     // Add planners to benchmark
-    b.addPlanner(std::make_shared<ompl::control::RRT>(ss->getSpaceInformation()));
-    auto kpiece = std::make_shared<ompl::control::KPIECE1>(ss->getSpaceInformation());
+    b.addPlanner(std::make_shared<ompl::control::RRT>(si));
+    auto kpiece = std::make_shared<ompl::control::KPIECE1>(si);
     b.addPlanner(kpiece);
     
     // Add RG-RRT with parameters
-    auto rgrrt = std::make_shared<ompl::control::RGRRT>(ss->getSpaceInformation());
+    auto rgrrt = std::make_shared<ompl::control::RGRRT>(si);
     rgrrt->setNumControlSamples(11);
     rgrrt->setReachabilityDuration(0.05);
     b.addPlanner(rgrrt);
@@ -206,6 +208,13 @@ void benchmarkPendulum(ompl::control::SimpleSetupPtr &ss, const std::string& log
     req.runCount = 50;
     req.displayProgress = true;
     
+    b.setPostRunEvent([si](const ompl::base::PlannerPtr& planner,
+                        ompl::tools::Benchmark::RunProperties& run) {
+        ompl::base::PlannerData pd(si);
+        planner->getPlannerData(pd);
+        run["tree_nodes INTEGER"] = std::to_string(pd.numVertices());
+    });
+
     // Run the benchmark
     b.benchmark(req);
     

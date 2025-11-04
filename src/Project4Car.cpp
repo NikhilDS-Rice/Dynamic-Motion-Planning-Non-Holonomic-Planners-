@@ -269,15 +269,16 @@ void benchmarkCar(ompl::control::SimpleSetupPtr &ss)
 {
     // Create benchmark object
     ompl::tools::Benchmark b(*ss, "Car Benchmark");
+    auto si = ss->getSpaceInformation();
     
     // Add RRT
-    b.addPlanner(std::make_shared<ompl::control::RRT>(ss->getSpaceInformation()));
+    b.addPlanner(std::make_shared<ompl::control::RRT>(si));
     
     // FIX: Add KPIECE1 with DEFAULT parameters - no tuning needed!
-    b.addPlanner(std::make_shared<ompl::control::KPIECE1>(ss->getSpaceInformation()));
+    b.addPlanner(std::make_shared<ompl::control::KPIECE1>(si));
     
     // Add RG-RRT
-    auto rgrrt = std::make_shared<ompl::control::RGRRT>(ss->getSpaceInformation());
+    auto rgrrt = std::make_shared<ompl::control::RGRRT>(si);
     rgrrt->setNumControlSamples(11);
     rgrrt->setReachabilityDuration(0.05);
     b.addPlanner(rgrrt);
@@ -288,7 +289,14 @@ void benchmarkCar(ompl::control::SimpleSetupPtr &ss)
     req.maxMem = 2000.0;
     req.runCount = 50;       // Increased to 50 runs for better statistics
     req.displayProgress = true;
-    
+
+    b.setPostRunEvent([si](const ompl::base::PlannerPtr& planner,
+                        ompl::tools::Benchmark::RunProperties& run) {
+        ompl::base::PlannerData pd(si);
+        planner->getPlannerData(pd);
+        run["tree_nodes INTEGER"] = std::to_string(pd.numVertices());
+    });
+
     b.benchmark(req);
     b.saveResultsToFile("car_benchmark.log");
     std::cout << "Benchmark results saved to car_benchmark.log" << std::endl;
