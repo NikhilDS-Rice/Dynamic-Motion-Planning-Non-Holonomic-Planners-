@@ -1,0 +1,21 @@
+Plan or Benchmark?
+ (1) Plan
+ (2) Benchmark
+Info:    Configuring planners ...
+Info:    Configured control_RRT
+Info:    KPIECE1: Attempting to use default projection.
+Info:    Configured control_KPIECE1
+Info:    Configured control_RGRRT
+Info:    Done configuring planners.
+Info:    Saving planner setup information ...
+Info:    Done saving information
+Info:    Beginning benchmark
+Running experiment Car Benchmark.
+Each planner will be executed 50 times for at most 60 seconds. Memory is limited at 2000MB.
+0%   10   20   30   40   50   60   70   80   90   100%
+|----|----|----|----|----|----|----|----|----|----|
+***************************************************
+
+Info:    Benchmark complete
+Info:    Results saved to 'car_benchmark.log'
+Benchmark results saved to car_benchmark.log

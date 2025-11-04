@@ -1,6 +1,11 @@
 import re
+import sys
 
-log_file = 'benchmark_results_new_code/car_benchmark.log'
+if len(sys.argv) < 2:
+    print("Usage: python analyze_results.py <log_file>")
+    sys.exit(1)
+
+log_file = sys.argv[1]
 
 with open(log_file, 'r') as f:
     content = f.read()
@@ -8,8 +13,11 @@ with open(log_file, 'r') as f:
 # Find all planner sections
 planner_sections = re.findall(r'control_(\w+)\n.*?\n(\d+) runs\n(.*?)\n\.', content, re.DOTALL)
 
+import os
+log_filename = os.path.basename(log_file)
+
 print("\n" + "="*70)
-print("CAR BENCHMARK RESULTS - NEW CODE")
+print(f"BENCHMARK RESULTS ANALYSIS: {log_filename}")
 print("="*70 + "\n")
 
 for planner_name, num_runs, data_section in planner_sections:
