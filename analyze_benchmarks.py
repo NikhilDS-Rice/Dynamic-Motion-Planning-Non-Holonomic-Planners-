@@ -5,6 +5,7 @@ Analyze OMPL benchmark results and create visualizations
 import re
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
 from collections import defaultdict
 import os
 
@@ -51,11 +52,14 @@ def parse_benchmark_log(filename):
                             time = float(parts[11])
                             states = int(parts[3])
                             path_length = float(parts[7])
+                            tree_nodes = int(parts[12])
                             
                             results[planner_name]['solved'].append(solved)
                             results[planner_name]['times'].append(time)
                             results[planner_name]['states'].append(states)
                             results[planner_name]['paths'].append(path_length)
+                            results[planner_name]['tree_nodes'].append(tree_nodes)
+
                         except (ValueError, IndexError):
                             pass
                 
@@ -217,93 +221,126 @@ def create_individual_torque_plots(results, torque_value):
     
     planners = ['RRT', 'KPIECE1', 'RGRRT']
     colors = {'RRT': '#1f77b4', 'KPIECE1': '#ff7f0e', 'RGRRT': '#2ca02c'}
-    
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    fig.suptitle(f'Pendulum Benchmark Results - Torque = {torque_value}', fontsize=16, fontweight='bold')
+
+    fig = plt.figure(figsize=(15, 8))
+    fig.suptitle(f'Pendulum Benchmark Results - Torque = {torque_value}',
+                 fontsize=16, fontweight='bold')
+    gs = GridSpec(2, 3, figure=fig, height_ratios=[1, 1])
+
+    ax_time   = fig.add_subplot(gs[0, 0])
+    ax_succ   = fig.add_subplot(gs[0, 1])
+    ax_states = fig.add_subplot(gs[0, 2])
+    ax_path   = fig.add_subplot(gs[1, 0:2])
+    ax_nodes  = fig.add_subplot(gs[1, 2])
     
     # 1. Box plot of solve times
-    ax = axes[0, 0]
-    data_to_plot = []
-    labels = []
-    for planner in planners:
-        if planner in results and results[planner]['times']:
-            data_to_plot.append(results[planner]['times'])
-            labels.append(planner)
-    
+    data_to_plot, labels = [], []
+    for p in planners:
+        if p in results and results[p].get('times'):
+            data_to_plot.append(results[p]['times'])
+            labels.append(p)
     if data_to_plot:
-        bp = ax.boxplot(data_to_plot, labels=labels, patch_artist=True)
-        for patch, planner in zip(bp['boxes'], labels):
-            patch.set_facecolor(colors[planner])
-            patch.set_alpha(0.7)
-    
-    ax.set_ylabel('Solve Time (s)', fontsize=11)
-    ax.set_title('Solve Time Distribution', fontsize=12, fontweight='bold')
-    ax.grid(True, alpha=0.3, axis='y')
+        bp = ax_time.boxplot(data_to_plot, tick_labels=labels, patch_artist=True)
+        for patch, p in zip(bp['boxes'], labels):
+            patch.set_facecolor(colors[p]); patch.set_alpha(0.7)
+    ax_time.set_ylabel('Solve Time (s)', fontsize=11)
+    ax_time.set_title('Solve Time Distribution', fontsize=12, fontweight='bold')
+    ax_time.grid(True, alpha=0.3, axis='y')
     
     # 2. Bar chart of success rates
-    ax = axes[0, 1]
     success_rates = []
-    for planner in planners:
-        if planner in results:
-            success_rates.append(results[planner]['success_rate'] * 100)
-        else:
-            success_rates.append(0)
-    
-    bars = ax.bar(planners, success_rates, color=[colors[p] for p in planners], alpha=0.8)
-    ax.set_ylabel('Success Rate (%)', fontsize=11)
-    ax.set_title('Success Rate', fontsize=12, fontweight='bold')
-    ax.set_ylim([0, 105])
-    ax.grid(True, alpha=0.3, axis='y')
-    
-    # Add percentage labels on bars
+    for p in planners:
+        sr = results.get(p, {}).get('success_rate', None)
+        success_rates.append(100.0 * float(sr) if sr is not None else 0.0)
+    bars = ax_succ.bar(planners, success_rates, color=[colors[p] for p in planners], alpha=0.85)
+    ax_succ.set_ylabel('Success Rate (%)', fontsize=11)
+    ax_succ.set_title('Success Rate', fontsize=12, fontweight='bold')
+    ax_succ.set_ylim([0, 105])
+    ax_succ.grid(True, alpha=0.3, axis='y')
     for bar, rate in zip(bars, success_rates):
-        height = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width()/2., height,
-                f'{rate:.1f}%', ha='center', va='bottom', fontsize=10)
+        ax_succ.text(bar.get_x() + bar.get_width()/2., bar.get_height(),
+                     f'{rate:.1f}%', ha='center', va='bottom', fontsize=10)
+    
     
     # 3. Box plot of graph states
-    ax = axes[1, 0]
-    data_to_plot = []
-    labels = []
-    for planner in planners:
-        if planner in results and results[planner]['states']:
-            data_to_plot.append(results[planner]['states'])
-            labels.append(planner)
-    
+    data_to_plot, labels = [], []
+    for p in planners:
+        if p in results and results[p].get('states'):
+            data_to_plot.append(results[p]['states'])
+            labels.append(p)
     if data_to_plot:
-        bp = ax.boxplot(data_to_plot, labels=labels, patch_artist=True)
-        for patch, planner in zip(bp['boxes'], labels):
-            patch.set_facecolor(colors[planner])
-            patch.set_alpha(0.7)
-    
-    ax.set_ylabel('Graph States', fontsize=11)
-    ax.set_title('Graph States Distribution', fontsize=12, fontweight='bold')
-    ax.grid(True, alpha=0.3, axis='y')
+        bp = ax_states.boxplot(data_to_plot, tick_labels=labels, patch_artist=True)
+        for patch, p in zip(bp['boxes'], labels):
+            patch.set_facecolor(colors[p]); patch.set_alpha(0.7)
+    ax_states.set_ylabel('Graph States', fontsize=11)
+    ax_states.set_title('Graph States Distribution', fontsize=12, fontweight='bold')
+    ax_states.grid(True, alpha=0.3, axis='y')
     
     # 4. Box plot of path lengths
-    ax = axes[1, 1]
-    data_to_plot = []
-    labels = []
-    for planner in planners:
-        if planner in results and results[planner]['paths']:
-            data_to_plot.append(results[planner]['paths'])
-            labels.append(planner)
-    
+    data_to_plot, labels = [], []
+    for p in planners:
+        if p in results and results[p].get('paths'):
+            data_to_plot.append(results[p]['paths'])
+            labels.append(p)
     if data_to_plot:
-        bp = ax.boxplot(data_to_plot, labels=labels, patch_artist=True)
-        for patch, planner in zip(bp['boxes'], labels):
-            patch.set_facecolor(colors[planner])
-            patch.set_alpha(0.7)
-    
-    ax.set_ylabel('Path Length', fontsize=11)
-    ax.set_title('Path Length Distribution', fontsize=12, fontweight='bold')
-    ax.grid(True, alpha=0.3, axis='y')
-    
+        bp = ax_path.boxplot(data_to_plot, tick_labels=labels, patch_artist=True)
+        for patch, p in zip(bp['boxes'], labels):
+            patch.set_facecolor(colors[p]); patch.set_alpha(0.7)
+    ax_path.set_ylabel('Path Length', fontsize=11)
+    ax_path.set_title('Path Length Distribution', fontsize=12, fontweight='bold')
+    ax_path.grid(True, alpha=0.3, axis='y')
+
+    # 5 Tree Nodes boxplot
+    data_to_plot, labels = [], []
+    for p in planners:
+        if p in results and results[p].get('tree_nodes'):
+            data_to_plot.append(results[p]['tree_nodes'])
+            labels.append(p)
+    if data_to_plot:
+        bp = ax_nodes.boxplot(data_to_plot, tick_labels=labels, patch_artist=True)
+        for patch, p in zip(bp['boxes'], labels):
+            patch.set_facecolor(colors[p]); patch.set_alpha(0.7)
+        ax_nodes.set_ylabel('Tree Nodes', fontsize=11)
+        ax_nodes.set_title('Tree Nodes Distribution', fontsize=12, fontweight='bold')
+        ax_nodes.grid(True, alpha=0.3, axis='y')
+    else:
+        # If no tree_nodes present, show a friendly message
+        ax_nodes.axis('off')
+        ax_nodes.text(0.5, 0.5, 'No tree_nodes\nin log', ha='center', va='center', fontsize=12)
+
     plt.tight_layout()
     output_file = f'benchmark_results/pendulum_torque{torque_value}_detailed.png'
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
     print(f"Saved detailed plot: {output_file}")
     plt.close()
+
+def _plot_tree_nodes_box(results, torque_value):
+    planners = ['RRT', 'KPIECE1', 'RGRRT']
+    colors = {'RRT': '#1f77b4', 'KPIECE1': '#ff7f0e', 'RGRRT': '#2ca02c'}
+
+    data_to_plot, labels = [], []
+    for p in planners:
+        if p in results and results[p].get('tree_nodes'):
+            data_to_plot.append(results[p]['tree_nodes'])
+            labels.append(p)
+
+    if not data_to_plot:
+        return
+
+    fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+    bp = ax.boxplot(data_to_plot, labels=labels, patch_artist=True)
+    for patch, p in zip(bp['boxes'], labels):
+        patch.set_facecolor(colors[p]); patch.set_alpha(0.7)
+
+    ax.set_ylabel('Tree Nodes', fontsize=11)
+    ax.set_title(f'Tree Nodes Distribution (Torque = {torque_value})', fontsize=12, fontweight='bold')
+    ax.grid(True, alpha=0.3, axis='y')
+    plt.tight_layout()
+    out = f'benchmark_results/pendulum_torque{torque_value}_tree_nodes.png'
+    plt.savefig(out, dpi=300, bbox_inches='tight')
+    print(f"Saved tree-nodes plot: {out}")
+    plt.close()
+
 
 def main():
     """Main analysis function"""
