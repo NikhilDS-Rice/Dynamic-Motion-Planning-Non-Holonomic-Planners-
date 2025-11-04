@@ -1,0 +1,39 @@
+
+Parsing benchmark_results/pendulum_benchmark_torque3.log...
+
+======================================================================
+PENDULUM BENCHMARK RESULTS - Torque = 3
+======================================================================
+
+KPIECE1:
+  Success Rate: 100.0%
+  Solve Time: 0.0101 ± 0.0067 s
+              (min: 0.0022, max: 0.0351)
+  Path Length: 12.23 ± 1.86
+  Graph States: 2259 ± 1166
+  Tree Nodes: 2259 ± 1166
+              (min: 601, max: 6198)
+
+RGRRT:
+  Success Rate: 100.0%
+  Solve Time: 0.0156 ± 0.0100 s
+              (min: 0.0034, max: 0.0529)
+  Path Length: 10.61 ± 1.66
+  Graph States: 1809 ± 1123
+  Tree Nodes: 1809 ± 1123
+              (min: 282, max: 5846)
+
+RRT:
+  Success Rate: 100.0%
+  Solve Time: 0.0123 ± 0.0072 s
+              (min: 0.0034, max: 0.0385)
+  Path Length: 10.04 ± 1.49
+  Graph States: 1640 ± 923
+  Tree Nodes: 1640 ± 923
+              (min: 325, max: 4664)
+
+Saved detailed plot: benchmark_results/pendulum_torque3_detailed.png
+
+======================================================================
+Analysis complete!
+======================================================================

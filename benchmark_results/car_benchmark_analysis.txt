@@ -1,0 +1,39 @@
+Parsing benchmark_results/car_benchmark.log...
+
+======================================================================
+CAR BENCHMARK RESULTS
+======================================================================
+
+KPIECE1:
+  Success Rate: 100.0%
+  Solve Time: 0.3468 ± 0.1888 s
+              (min: 0.0520, max: 0.7188)
+  Path Length: 133.48 ± 58.66
+  Graph States: 10439 ± 5251
+  Tree Nodes: 10439 ± 5251
+              (min: 1805, max: 21528)
+
+RGRRT:
+  Success Rate: 100.0%
+  Solve Time: 0.3432 ± 0.1882 s
+              (min: 0.1288, max: 1.2727)
+  Path Length: 72.53 ± 15.30
+  Graph States: 2125 ± 1174
+  Tree Nodes: 2125 ± 1174
+              (min: 753, max: 7900)
+
+RRT:
+  Success Rate: 100.0%
+  Solve Time: 0.3319 ± 0.1353 s
+              (min: 0.1104, max: 0.8717)
+  Path Length: 78.04 ± 13.91
+  Graph States: 2152 ± 857
+  Tree Nodes: 2152 ± 857
+              (min: 746, max: 5447)
+
+
+Saved plot: benchmark_results/car_benchmark_results.png
+
+======================================================================
+Car benchmark analysis complete!
+======================================================================
