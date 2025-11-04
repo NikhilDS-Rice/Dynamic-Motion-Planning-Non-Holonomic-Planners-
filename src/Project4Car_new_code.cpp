@@ -44,15 +44,20 @@ public:
 
     unsigned int getDimension() const override
     {
-        return 2;
+        // Project the 4D state space to 4D to keep ALL information
+        return 4;
     }
 
     void project(const ompl::base::State * state , Eigen::Ref<Eigen::VectorXd> projection ) const override
     {
         const auto *cs = state->as<ob::CompoundState>();
         const auto *se2 = cs->as<ob::SE2StateSpace::StateType>(0);
+        const auto *vvec = cs->as<ob::RealVectorStateSpace::StateType>(1);
+        
         projection[0] = se2->getX();
         projection[1] = se2->getY();
+        projection[2] = se2->getYaw();    // Keep orientation!
+        projection[3] = vvec->values[0];  // Keep velocity!
     }
 };
 
@@ -168,7 +173,7 @@ ompl::control::SimpleSetupPtr createCar(std::vector<Rectangle>& obstacles)
 
     auto space = std::make_shared<ob::CompoundStateSpace>();
     space->addSubspace(se2, 1.0);
-    space->addSubspace(vspace, 0.5);
+    space->addSubspace(vspace, 1.0);  // Equal weight like pendulum
     space->lock();
 
     // --- Control space: [omega, accel] ---
@@ -184,27 +189,27 @@ ompl::control::SimpleSetupPtr createCar(std::vector<Rectangle>& obstacles)
     auto ss = std::make_shared<oc::SimpleSetup>(cspace);
     auto si = ss->getSpaceInformation();
 
-    // Projection for KPIECE
-    space->registerDefaultProjection(std::make_shared<CarProjection>(space.get()));
-
-    // ODE solver / propagator
+    // ODE solver / propagator (MUST be set BEFORE projection registration!)
     auto odeSolver = std::make_shared<oc::ODEBasicSolver<>>(si, &carODE);
     si->setStatePropagator(oc::ODESolver::getStatePropagator(odeSolver));
     
-    // FIX: Set control duration and propagation step size explicitly
+    // Set control duration and propagation step size
     si->setMinMaxControlDuration(1, 100);  // More steps for car (needs more control authority)
     si->setPropagationStepSize(0.02);      // 20ms integration step for car dynamics
 
-    // Validity checker
-    si->setStateValidityChecker(std::make_shared<CarValidityChecker>(si, obstacles, CAR_SIZE));
+    // Validity checker (use ss-> like pendulum to ensure consistency)
+    ss->setStateValidityChecker(std::make_shared<CarValidityChecker>(si, obstacles, CAR_SIZE));
 
     // --- Start / Goal states ---
     ob::ScopedState<> start(space), goal(space);
     start[0] = -40.0; start[1] = -40.0; start[2] = 0.0; start[3] = 0.0;
     goal[0]  =  40.0; goal[1]  =  40.0; goal[2]  = 0.0; goal[3]  = 0.0;
 
-    // FIX: Increase goal tolerance (was 2.0, now 3.0 for better success)
+    // Increase goal tolerance for better success
     ss->setStartAndGoalStates(start, goal, 3.0);
+
+    // Projection for KPIECE (register AFTER everything else is set up!)
+    space->registerDefaultProjection(std::make_shared<CarProjection>(space.get()));
 
     return ss;
 }
