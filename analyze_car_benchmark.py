@@ -97,8 +97,12 @@ def print_statistics(results):
         if data['states']:
             states = np.array(data['states'])
             print(f"  Graph States: {np.mean(states):.0f} ± {np.std(states):.0f}")
-        print()
 
+        if data['tree_nodes']:
+            tree_nodes = np.array(data['tree_nodes'])
+            print(f"  Tree Nodes: {np.mean(tree_nodes):.0f} ± {np.std(tree_nodes):.0f}")
+            print(f"              (min: {np.min(tree_nodes):.0f}, max: {np.max(tree_nodes):.0f})")
+        print()
 def create_car_plots(results):
     """Create visualization plots for car benchmark"""
     

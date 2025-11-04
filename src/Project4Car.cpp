@@ -92,11 +92,7 @@ class CarValidityChecker : public ob::StateValidityChecker {
         bool isValid(const ob::State* state) const override {
             const auto* cs  = state->as<ob::CompoundState>();
             const auto* se2 = cs->as<ob::SE2StateSpace::StateType>(0);
-            
-            const auto* vvec = cs->as<ob::RealVectorStateSpace::StateType>(1);
-            const double v   = vvec->values[0];
-            if (v < -10.0 || v > 10.0) return false; 
-
+    
             const double x     = se2->getX();
             const double y     = se2->getY();
             const double theta = se2->getYaw();

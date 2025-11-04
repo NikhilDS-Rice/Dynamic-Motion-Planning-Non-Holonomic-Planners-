@@ -4,6 +4,8 @@ Visualize pendulum paths in phase space (theta vs omega)
 """
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+import numpy as np
 import sys
 
 def read_path(filename):
@@ -46,6 +48,9 @@ def plot_pendulum_phase_space(theta, omega, title="Pendulum Phase Space"):
     ax.axvline(x=0, color='k', linestyle='--', alpha=0.3)
     ax.axvline(x=-np.pi/2, color='g', linestyle='--', alpha=0.3, label='Start (hanging)')
     ax.axvline(x=np.pi/2, color='r', linestyle='--', alpha=0.3, label='Goal (up)')
+
+    ax.set_xticks([-np.pi, -np.pi/2, 0, np.pi/2, np.pi])
+    ax.set_xticklabels(['−π', '−π/2', '0', 'π/2', 'π'])
     
     plt.tight_layout()
     return fig

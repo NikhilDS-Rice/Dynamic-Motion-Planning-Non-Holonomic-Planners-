@@ -98,6 +98,11 @@ def print_statistics(results, torque_value):
         if data['states']:
             states = np.array(data['states'])
             print(f"  Graph States: {np.mean(states):.0f} ± {np.std(states):.0f}")
+
+        if data['tree_nodes']:
+            tree_nodes = np.array(data['tree_nodes'])
+            print(f"  Tree Nodes: {np.mean(tree_nodes):.0f} ± {np.std(tree_nodes):.0f}")
+            print(f"              (min: {np.min(tree_nodes):.0f}, max: {np.max(tree_nodes):.0f})")
         print()
 
 def create_comparison_plots(all_results, torque_values):

@@ -229,10 +229,12 @@ if __name__ == "__main__":
         x, y, theta, v = read_car_path(filename)
         
         # Determine planner from filename
-        if "rrt" in filename.lower():
-            planner = "RRT"
+        if "rgrrt" in filename.lower():
+            planner = "RG-RRT"
         elif "kpiece" in filename.lower():
             planner = "KPIECE1"
+        elif "rrt" in filename.lower():
+            planner = "RRT"
         else:
             planner = "Unknown"
         
