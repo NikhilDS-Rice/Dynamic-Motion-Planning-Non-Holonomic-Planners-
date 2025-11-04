@@ -44,24 +44,26 @@ public:
 
     unsigned int getDimension() const override
     {
-        // TODO: The dimension of your projection for the car
-        return 2;
+        // Project the 4D state space to 4D to keep ALL information
+        return 4;
     }
 
     void project(const ompl::base::State * state , Eigen::Ref<Eigen::VectorXd> projection ) const override
     {
-        // TODO: Your projection for the car
         const auto *cs = state->as<ob::CompoundState>();
         const auto *se2 = cs->as<ob::SE2StateSpace::StateType>(0);
+        const auto *vvec = cs->as<ob::RealVectorStateSpace::StateType>(1);
+        
         projection[0] = se2->getX();
         projection[1] = se2->getY();
+        projection[2] = se2->getYaw();    // Keep orientation!
+        projection[3] = vvec->values[0];  // Keep velocity!
     }
 };
 
 void carODE(const ompl::control::ODESolver::StateType &  q , const ompl::control::Control * control ,
             ompl::control::ODESolver::StateType & qdot )
 {
-    // TODO: Fill in the ODE for the car's dynamics
     const auto *u = control->as<oc::RealVectorControlSpace::ControlType>();
     const double x     = q[0];
     const double y     = q[1];
@@ -88,10 +90,13 @@ class CarValidityChecker : public ob::StateValidityChecker {
             : ob::StateValidityChecker(si), obstacles_(obstacles), carSide_(carSide) {}
     
         bool isValid(const ob::State* state) const override {
-            // State is Compound: [ SE2 (idx 0) | velocity (idx 1) ]
             const auto* cs  = state->as<ob::CompoundState>();
             const auto* se2 = cs->as<ob::SE2StateSpace::StateType>(0);
-    
+            
+            const auto* vvec = cs->as<ob::RealVectorStateSpace::StateType>(1);
+            const double v   = vvec->values[0];
+            if (v < -10.0 || v > 10.0) return false; 
+
             const double x     = se2->getX();
             const double y     = se2->getY();
             const double theta = se2->getYaw();
@@ -106,10 +111,6 @@ class CarValidityChecker : public ob::StateValidityChecker {
 
 void makeStreet(std::vector<Rectangle> &  obstacles )
 {
-    // TODO: Fill in the vector of rectangles with your street environment.
-     // Create a simple street environment with obstacles
-    // The environment is roughly 100x100 units
-    
     // Left wall
     Rectangle r1;
     r1.x = -50; r1.y = -50;
@@ -161,54 +162,58 @@ ompl::control::SimpleSetupPtr createCar(std::vector<Rectangle>& obstacles)
     namespace oc = ompl::control;
 
     // --- State space: SE(2) + R (velocity) ---
+    // NOTE: SE2StateSpace already properly handles angle wrapping for theta!
     auto se2 = std::make_shared<ob::SE2StateSpace>();
     ob::RealVectorBounds xyBounds(2);
-    xyBounds.setLow(-50);   // x,y lower bound
-    xyBounds.setHigh(50);   // x,y upper bound
+    xyBounds.setLow(-50);
+    xyBounds.setHigh(50);
     se2->setBounds(xyBounds);
 
     auto vspace = std::make_shared<ob::RealVectorStateSpace>(1);
     ob::RealVectorBounds vBounds(1);
-    vBounds.setLow(-10);    // can reverse
-    vBounds.setHigh(10);    // forward limit
+    vBounds.setLow(-10);
+    vBounds.setHigh(10);
     vspace->setBounds(vBounds);
 
     auto space = std::make_shared<ob::CompoundStateSpace>();
     space->addSubspace(se2, 1.0);
-    space->addSubspace(vspace, 0.5);
+    space->addSubspace(vspace, 1.0);  // Equal weight like pendulum
     space->lock();
 
     // --- Control space: [omega, accel] ---
     auto cspace = std::make_shared<oc::RealVectorControlSpace>(space, 2);
     ob::RealVectorBounds uBounds(2);
-    uBounds.setLow(0, -2.0);  // omega min
-    uBounds.setHigh(0,  2.0); // omega max
-    uBounds.setLow(1, -3.0);  // accel min
-    uBounds.setHigh(1,  3.0); // accel max
+    uBounds.setLow(0, -2.0);
+    uBounds.setHigh(0,  2.0);
+    uBounds.setLow(1, -3.0);
+    uBounds.setHigh(1,  3.0);
     cspace->setBounds(uBounds);
 
     // --- SimpleSetup + ODE propagator ---
     auto ss = std::make_shared<oc::SimpleSetup>(cspace);
     auto si = ss->getSpaceInformation();
 
-    // Projection for KPIECE, etc.
-    space->registerDefaultProjection(std::make_shared<CarProjection>(space.get()));
-
-    // ODE solver / propagator
+    // ODE solver / propagator (MUST be set BEFORE projection registration!)
     auto odeSolver = std::make_shared<oc::ODEBasicSolver<>>(si, &carODE);
     si->setStatePropagator(oc::ODESolver::getStatePropagator(odeSolver));
-    si->setMinMaxControlDuration(1, 20);
-    si->setPropagationStepSize(0.05);
+    
+    // Set control duration and propagation step size
+    si->setMinMaxControlDuration(1, 100);  // More steps for car (needs more control authority)
+    si->setPropagationStepSize(0.02);      // 20ms integration step for car dynamics
 
-    // Validity checker (uses isValidSquare via CarValidityChecker)
-    si->setStateValidityChecker(std::make_shared<CarValidityChecker>(si, obstacles, CAR_SIZE));
+    // Validity checker (use ss-> like pendulum to ensure consistency)
+    ss->setStateValidityChecker(std::make_shared<CarValidityChecker>(si, obstacles, CAR_SIZE));
 
-    // --- Start / Goal states: [x, y, theta, v] ---
+    // --- Start / Goal states ---
     ob::ScopedState<> start(space), goal(space);
     start[0] = -40.0; start[1] = -40.0; start[2] = 0.0; start[3] = 0.0;
     goal[0]  =  40.0; goal[1]  =  40.0; goal[2]  = 0.0; goal[3]  = 0.0;
 
-    ss->setStartAndGoalStates(start, goal, 2.0);  // goal tolerance
+    // Increase goal tolerance for better success
+    ss->setStartAndGoalStates(start, goal, 3.0);
+
+    // Projection for KPIECE (register AFTER everything else is set up!)
+    space->registerDefaultProjection(std::make_shared<CarProjection>(space.get()));
 
     return ss;
 }
@@ -216,35 +221,38 @@ ompl::control::SimpleSetupPtr createCar(std::vector<Rectangle>& obstacles)
 
 void planCar(ompl::control::SimpleSetupPtr & ss , int choice)
 {
-    // TODO: Do some motion planning for the car
-    // choice is what planner to use.
     ob::PlannerPtr planner;
     std::string plannerName;
-    if (choice == 1)   {
+    
+    if (choice == 1) {
         planner = std::make_shared<oc::RRT>(ss->getSpaceInformation());
         plannerName = "rrt";
+        std::cout << "Using RRT planner" << std::endl;
     }    
     else if (choice == 2) {
+        // FIX: Use default KPIECE1 parameters - they work when state space is correct!
         planner = std::make_shared<oc::KPIECE1>(ss->getSpaceInformation());
         plannerName = "kpiece";
+        std::cout << "Using KPIECE1 planner with default parameters" << std::endl;
     } 
     else if (choice == 3) {
         auto rgrrtPlanner = std::make_shared<oc::RGRRT>(ss->getSpaceInformation());
-        // Set parameters for RG-RRT
-        rgrrtPlanner->setNumControlSamples(11);  // 11 evenly spaced values for first control dimension
-        rgrrtPlanner->setReachabilityDuration(0.05);  // Small time step for reachability
+        rgrrtPlanner->setNumControlSamples(11);
+        rgrrtPlanner->setReachabilityDuration(0.05);
         planner = rgrrtPlanner;
         plannerName = "rgrrt";
+        std::cout << "Using RG-RRT planner" << std::endl;
     }
 
     ss->setPlanner(planner);
-    if (ss->solve(300.0)) {  // 300 seconds timeout for complex car problem
+    ss->setup();
+    
+    ob::PlannerStatus solved = ss->solve(60.0);  // Reduced to 60 seconds - should solve much faster now
+    
+    if (solved) {
         std::cout << "Found solution:" << std::endl;
-        
-        // Print the path to screen
         ss->getSolutionPath().printAsMatrix(std::cout);
         
-        // Save the solution path to a file with unique name
         std::string filename = "output/car_" + plannerName + "_path.txt";
         std::ofstream fout(filename);
         ss->getSolutionPath().printAsMatrix(fout);
@@ -252,7 +260,7 @@ void planCar(ompl::control::SimpleSetupPtr & ss , int choice)
         
         std::cout << "Solution saved to " << filename << std::endl;
     } else {
-        std::cout << "No solution found\n";
+        std::cout << "No solution found" << std::endl;
     }
 }
 
@@ -262,11 +270,13 @@ void benchmarkCar(ompl::control::SimpleSetupPtr &ss)
     // Create benchmark object
     ompl::tools::Benchmark b(*ss, "Car Benchmark");
     
-    // Add planners to benchmark
+    // Add RRT
     b.addPlanner(std::make_shared<ompl::control::RRT>(ss->getSpaceInformation()));
+    
+    // FIX: Add KPIECE1 with DEFAULT parameters - no tuning needed!
     b.addPlanner(std::make_shared<ompl::control::KPIECE1>(ss->getSpaceInformation()));
     
-    // Add RG-RRT with parameters
+    // Add RG-RRT
     auto rgrrt = std::make_shared<ompl::control::RGRRT>(ss->getSpaceInformation());
     rgrrt->setNumControlSamples(11);
     rgrrt->setReachabilityDuration(0.05);
@@ -274,20 +284,17 @@ void benchmarkCar(ompl::control::SimpleSetupPtr &ss)
     
     // Set benchmark parameters
     ompl::tools::Benchmark::Request req;
-    req.maxTime = 300.0;  // 5 minutes for car (more complex problem)
-    req.maxMem = 1000.0;
-    req.runCount = 20;
+    req.maxTime = 60.0;      // Reduced from 300s - should solve much faster now
+    req.maxMem = 2000.0;
+    req.runCount = 50;       // Increased to 50 runs for better statistics
     req.displayProgress = true;
     
-    // Run the benchmark
     b.benchmark(req);
-    
-    // Save results
     b.saveResultsToFile("car_benchmark.log");
     std::cout << "Benchmark results saved to car_benchmark.log" << std::endl;
 }
 
-int main(int  argc , char ** argv )
+int main()
 {
     std::vector<Rectangle> obstacles;
     makeStreet(obstacles);
@@ -295,37 +302,32 @@ int main(int  argc , char ** argv )
     int choice;
     do
     {
-        std::cout << "Plan or Benchmark? " << std::endl;
+        std::cout << "Plan or Benchmark?" << std::endl;
         std::cout << " (1) Plan" << std::endl;
         std::cout << " (2) Benchmark" << std::endl;
-
         std::cin >> choice;
     } while (choice < 1 || choice > 2);
 
-    ompl::control::SimpleSetupPtr ss = createCar(obstacles);
+    auto ss = createCar(obstacles);
 
-    // Planning
     if (choice == 1)
     {
         int planner;
         do
         {
-            std::cout << "What Planner? " << std::endl;
+            std::cout << "What Planner?" << std::endl;
             std::cout << " (1) RRT" << std::endl;
             std::cout << " (2) KPIECE1" << std::endl;
             std::cout << " (3) RG-RRT" << std::endl;
-
             std::cin >> planner;
         } while (planner < 1 || planner > 3);
 
         planCar(ss, planner);
     }
-    // Benchmarking
     else if (choice == 2)
+    {
         benchmarkCar(ss);
-
-    else
-        std::cerr << "How did you get here? Invalid choice." << std::endl;
+    }
 
     return 0;
 }

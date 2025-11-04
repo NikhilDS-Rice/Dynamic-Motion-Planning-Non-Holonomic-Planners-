@@ -106,7 +106,11 @@ ompl::control::SimpleSetupPtr createPendulum(double torque)
     si->setPropagationStepSize(0.015);     // 15 ms per integration step
 
     // Pendulum has no obstacles: all states within bounds are valid
-    ss->setStateValidityChecker([](const ob::State*){ return true; });
+    ss->setStateValidityChecker([si = ss->getSpaceInformation()](const ob::State* s){
+        const auto* cs = s->as<ob::CompoundState>();
+        const auto* w  = cs->as<ob::RealVectorStateSpace::StateType>(1);
+        return std::abs(w->values[0]) <= 10.0 && si->satisfiesBounds(s);
+    });
 
     // --- Start / Goal ---
     ob::ScopedState<> start(space), goal(space);
