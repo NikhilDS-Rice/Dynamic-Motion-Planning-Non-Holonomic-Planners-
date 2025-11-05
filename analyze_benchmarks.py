@@ -105,121 +105,6 @@ def print_statistics(results, torque_value):
             print(f"              (min: {np.min(tree_nodes):.0f}, max: {np.max(tree_nodes):.0f})")
         print()
 
-def create_comparison_plots(all_results, torque_values):
-    """Create comparison plots across all torque values"""
-    
-    # Set up the figure with subplots
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    fig.suptitle('Pendulum Benchmark Comparison Across Torque Values', fontsize=16, fontweight='bold')
-    
-    planners = ['RRT', 'KPIECE1', 'RGRRT']
-    colors = {'RRT': '#1f77b4', 'KPIECE1': '#ff7f0e', 'RGRRT': '#2ca02c'}
-    
-    # 1. Solve Time Comparison
-    ax = axes[0, 0]
-    x_pos = np.arange(len(torque_values))
-    width = 0.25
-    
-    for i, planner in enumerate(planners):
-        means = []
-        stds = []
-        for torque in torque_values:
-            if planner in all_results[torque] and all_results[torque][planner]['times']:
-                times = np.array(all_results[torque][planner]['times'])
-                means.append(np.mean(times))
-                stds.append(np.std(times))
-            else:
-                means.append(0)
-                stds.append(0)
-        
-        ax.bar(x_pos + i*width, means, width, yerr=stds, 
-               label=planner, color=colors[planner], alpha=0.8, capsize=5)
-    
-    ax.set_xlabel('Torque Value', fontsize=11)
-    ax.set_ylabel('Solve Time (s)', fontsize=11)
-    ax.set_title('Average Solve Time by Torque', fontsize=12, fontweight='bold')
-    ax.set_xticks(x_pos + width)
-    ax.set_xticklabels(torque_values)
-    ax.legend()
-    ax.grid(True, alpha=0.3, axis='y')
-    
-    # 2. Success Rate Comparison
-    ax = axes[0, 1]
-    for i, planner in enumerate(planners):
-        success_rates = []
-        for torque in torque_values:
-            if planner in all_results[torque]:
-                success_rates.append(all_results[torque][planner]['success_rate'] * 100)
-            else:
-                success_rates.append(0)
-        
-        ax.bar(x_pos + i*width, success_rates, width,
-               label=planner, color=colors[planner], alpha=0.8)
-    
-    ax.set_xlabel('Torque Value', fontsize=11)
-    ax.set_ylabel('Success Rate (%)', fontsize=11)
-    ax.set_title('Success Rate by Torque', fontsize=12, fontweight='bold')
-    ax.set_xticks(x_pos + width)
-    ax.set_xticklabels(torque_values)
-    ax.set_ylim([0, 105])
-    ax.legend()
-    ax.grid(True, alpha=0.3, axis='y')
-    
-    # 3. Graph States Comparison
-    ax = axes[1, 0]
-    for i, planner in enumerate(planners):
-        means = []
-        stds = []
-        for torque in torque_values:
-            if planner in all_results[torque] and all_results[torque][planner]['states']:
-                states = np.array(all_results[torque][planner]['states'])
-                means.append(np.mean(states))
-                stds.append(np.std(states))
-            else:
-                means.append(0)
-                stds.append(0)
-        
-        ax.bar(x_pos + i*width, means, width, yerr=stds,
-               label=planner, color=colors[planner], alpha=0.8, capsize=5)
-    
-    ax.set_xlabel('Torque Value', fontsize=11)
-    ax.set_ylabel('Graph States', fontsize=11)
-    ax.set_title('Average Graph States by Torque', fontsize=12, fontweight='bold')
-    ax.set_xticks(x_pos + width)
-    ax.set_xticklabels(torque_values)
-    ax.legend()
-    ax.grid(True, alpha=0.3, axis='y')
-    
-    # 4. Path Length Comparison
-    ax = axes[1, 1]
-    for i, planner in enumerate(planners):
-        means = []
-        stds = []
-        for torque in torque_values:
-            if planner in all_results[torque] and all_results[torque][planner]['paths']:
-                paths = np.array(all_results[torque][planner]['paths'])
-                means.append(np.mean(paths))
-                stds.append(np.std(paths))
-            else:
-                means.append(0)
-                stds.append(0)
-        
-        ax.bar(x_pos + i*width, means, width, yerr=stds,
-               label=planner, color=colors[planner], alpha=0.8, capsize=5)
-    
-    ax.set_xlabel('Torque Value', fontsize=11)
-    ax.set_ylabel('Path Length', fontsize=11)
-    ax.set_title('Average Path Length by Torque', fontsize=12, fontweight='bold')
-    ax.set_xticks(x_pos + width)
-    ax.set_xticklabels(torque_values)
-    ax.legend()
-    ax.grid(True, alpha=0.3, axis='y')
-    
-    plt.tight_layout()
-    output_file = 'benchmark_results/pendulum_comparison_all_torques.png'
-    plt.savefig(output_file, dpi=300, bbox_inches='tight')
-    print(f"\nSaved comparison plot: {output_file}")
-    plt.close()
 
 def create_individual_torque_plots(results, torque_value):
     """Create detailed plots for a specific torque value"""
@@ -351,7 +236,7 @@ def main():
     """Main analysis function"""
     
     # Torque values to analyze
-    torque_values = [3, 5, 10]
+    torque_values = [3]
     all_results = {}
     
     # Parse each benchmark log
@@ -365,11 +250,6 @@ def main():
             create_individual_torque_plots(results, torque)
         else:
             print(f"Warning: {filename} not found")
-    
-    # Create comparison plots across all torque values
-    if all_results:
-        print("\nCreating comparison plots across all torque values...")
-        create_comparison_plots(all_results, torque_values)
     
     print("\n" + "="*70)
     print("Analysis complete!")

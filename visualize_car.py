@@ -220,6 +220,42 @@ def plot_car_workspace_detailed(x, y, theta):
 
 if __name__ == "__main__":
     # Read the path
+
+    if len(sys.argv) > 1 and sys.argv[1].lower() == "environment":
+        fig, ax = plt.subplots(figsize=(12, 12))
+
+        for obs in obstacles:
+            rect = RectPatch((obs['x'], obs['y']), obs['width'], obs['height'],
+                             linewidth=2, edgecolor='black', facecolor='gray', alpha=0.7)
+            ax.add_patch(rect)
+
+        # Mark start and goal
+        start_x, start_y = -40, -40
+        goal_x, goal_y = 40, 40
+
+        draw_car_square(ax, start_x, start_y, theta=0.0, size=1.5, color='green', alpha=0.6)
+
+        ax.plot(start_x, start_y, 'go', markersize=12, label='Start (-40, -40)')
+        ax.plot(goal_x, goal_y, 'r*', markersize=18, label='Goal (40, 40)')
+
+        # Labels and formatting
+        ax.set_xlabel('X Position', fontsize=14)
+        ax.set_ylabel('Y Position', fontsize=14)
+        ax.set_title('Car Environment with Obstacles', fontsize=16, fontweight='bold')
+        ax.set_xlim(-55, 55)
+        ax.set_ylim(-55, 55)
+        ax.set_aspect('equal')
+        ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=12, loc='upper right')
+
+        # Save the figure
+        fig.savefig("setup_environment.png", dpi=150, bbox_inches='tight')
+        print("Saved: setup_environment.png")
+
+        plt.tight_layout()
+        plt.show()
+        sys.exit(0)
+
     if len(sys.argv) > 1:
         filename = sys.argv[1]
     else:
