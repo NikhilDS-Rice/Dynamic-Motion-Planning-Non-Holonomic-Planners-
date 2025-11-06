@@ -56,18 +56,17 @@ public:
         double theta = se2->getYaw();
         double v = vvec->values[0];
         
-        // TRUE EUCLIDEAN DISTANCE in physical space (not normalized!)
+        // EUCLIDEAN DISTANCE 
         double dx = x - goalX_;
         double dy = y - goalY_;
         double spatialDist = std::sqrt(dx*dx + dy*dy);
         
-        // For orientation, compute shortest angular distance
+        // For orientation, we compute shortest angular distance
         double dtheta = std::abs(theta - goalTheta_);
         while (dtheta > M_PI) dtheta -= 2.0 * M_PI;
         dtheta = std::abs(dtheta);
         
-        // Return spatial distance as primary metric
-        // (we care most about reaching the position)
+        // Returning spatial distance
         return spatialDist;
     }
 
@@ -75,7 +74,7 @@ private:
     double goalX_, goalY_, goalTheta_, goalV_;
 }; 
 
-// Your projection for the car
+// Projection for the car
 class CarProjection : public ompl::base::ProjectionEvaluator
 {
 public:
@@ -85,7 +84,7 @@ public:
 
     unsigned int getDimension() const override
     {
-        // Project the 4D state space to 4D to keep ALL information
+        // Projecting the 4D state space to 4D to keep all the information
         return 4;
     }
 
@@ -97,8 +96,8 @@ public:
         
         projection[0] = se2->getX();
         projection[1] = se2->getY();
-        projection[2] = se2->getYaw();    // Keep orientation!
-        projection[3] = vvec->values[0];  // Keep velocity!
+        projection[2] = se2->getYaw();    // orientation
+        projection[3] = vvec->values[0];  // velocity
     }
 };
 
@@ -198,8 +197,8 @@ ompl::control::SimpleSetupPtr createCar(std::vector<Rectangle>& obstacles)
     namespace ob = ompl::base;
     namespace oc = ompl::control;
 
-    // --- State space: SE(2) + R (velocity) ---
-    // NOTE: SE2StateSpace already properly handles angle wrapping for theta!
+    //  State space: SE(2) + R (velocity) 
+
     auto se2 = std::make_shared<ob::SE2StateSpace>();
     ob::RealVectorBounds xyBounds(2);
     xyBounds.setLow(-50);
@@ -213,13 +212,12 @@ ompl::control::SimpleSetupPtr createCar(std::vector<Rectangle>& obstacles)
     vspace->setBounds(vBounds);
 
     auto space = std::make_shared<ob::CompoundStateSpace>();
-    // FIX: Increase SE2 weight to prioritize spatial convergence
-    // SE2 distance gets normalized by bounds (100 units), so we need higher weight
-    space->addSubspace(se2, 10.0);    // Higher weight for position/orientation
-    space->addSubspace(vspace, 0.5);  // Lower weight for velocity
+    
+    space->addSubspace(se2, 10.0);     
+    space->addSubspace(vspace, 0.5);  
     space->lock();
 
-    // --- Control space: [omega, accel] ---
+    // Control space: [omega, accel] 
     auto cspace = std::make_shared<oc::RealVectorControlSpace>(space, 2);
     ob::RealVectorBounds uBounds(2);
     uBounds.setLow(0, -2.0);
@@ -228,29 +226,29 @@ ompl::control::SimpleSetupPtr createCar(std::vector<Rectangle>& obstacles)
     uBounds.setHigh(1,  3.0);
     cspace->setBounds(uBounds);
 
-    // --- SimpleSetup + ODE propagator ---
+    // SimpleSetup + ODE propagator 
     auto ss = std::make_shared<oc::SimpleSetup>(cspace);
     auto si = ss->getSpaceInformation();
 
-    // ODE solver / propagator (MUST be set BEFORE projection registration!)
+    // ODE solver
     auto odeSolver = std::make_shared<oc::ODEBasicSolver<>>(si, &carODE);
     si->setStatePropagator(oc::ODESolver::getStatePropagator(odeSolver));
     
     // Set control duration and propagation step size
-    si->setMinMaxControlDuration(1, 100);  // More steps for car (needs more control authority)
-    si->setPropagationStepSize(0.02);      // 20ms integration step for car dynamics
+    si->setMinMaxControlDuration(1, 100);  
+    si->setPropagationStepSize(0.02);      
 
-    // Validity checker (use ss-> like pendulum to ensure consistency)
+    // Validity checker 
     ss->setStateValidityChecker(std::make_shared<CarValidityChecker>(si, obstacles, CAR_SIZE));
 
-    // --- Start / Goal states ---
+    // Start / Goal states
     ob::ScopedState<> start(space);
     start[0] = -40.0; start[1] = -40.0; start[2] = 0.0; start[3] = 0.0;
     
     // Goal position
     double goalX = 40.0, goalY = 40.0, goalTheta = 0.0, goalV = 0.0;
     
-    // Use CUSTOM goal region with TRUE Euclidean distance, tolerance = 3.0
+    
     auto goalRegion = std::make_shared<CarGoalRegion>(si, goalX, goalY, goalTheta, goalV, 3.0);
     
     ss->setStartState(start);
@@ -258,7 +256,7 @@ ompl::control::SimpleSetupPtr createCar(std::vector<Rectangle>& obstacles)
     
     std::cout << "Goal tolerance set to 3.0 meters (true Euclidean distance)" << std::endl;
 
-    // Projection for KPIECE (register AFTER everything else is set up!)
+    
     space->registerDefaultProjection(std::make_shared<CarProjection>(space.get()));
 
     return ss;
@@ -276,7 +274,7 @@ void planCar(ompl::control::SimpleSetupPtr & ss , int choice)
         std::cout << "Using RRT planner" << std::endl;
     }    
     else if (choice == 2) {
-        // FIX: Use default KPIECE1 parameters - they work when state space is correct!
+        
         planner = std::make_shared<oc::KPIECE1>(ss->getSpaceInformation());
         plannerName = "kpiece";
         std::cout << "Using KPIECE1 planner with default parameters" << std::endl;
@@ -297,8 +295,8 @@ void planCar(ompl::control::SimpleSetupPtr & ss , int choice)
     std::cout << "Starting planning with " << (choice == 2 ? "120" : "60") << " second timeout..." << std::endl;
     std::cout << "Planner will NOT terminate until goal (within 3.0m) is reached or timeout expires." << std::endl;
     
-    // Increase timeout for KPIECE1 which may need more time with fixed weights
-    double timeout = (choice == 2) ? 120.0 : 60.0;  // 120s for KPIECE1, 60s for others
+    
+    double timeout = (choice == 2) ? 120.0 : 60.0;  
     ob::PlannerStatus solved = ss->solve(timeout);
     
     if (solved) {
@@ -348,8 +346,8 @@ void benchmarkCar(ompl::control::SimpleSetupPtr &ss)
     
     // Add RRT
     b.addPlanner(std::make_shared<ompl::control::RRT>(si));
-    
-    // FIX: Add KPIECE1 with DEFAULT parameters - no tuning needed!
+
+    // Add KPIECE1
     b.addPlanner(std::make_shared<ompl::control::KPIECE1>(si));
     
     // Add RG-RRT
@@ -360,9 +358,9 @@ void benchmarkCar(ompl::control::SimpleSetupPtr &ss)
     
     // Set benchmark parameters
     ompl::tools::Benchmark::Request req;
-    req.maxTime = 60.0;      // Reduced from 300s - should solve much faster now
+    req.maxTime = 60.0;      
     req.maxMem = 2000.0;
-    req.runCount = 50;       // Increased to 50 runs for better statistics
+    req.runCount = 50;       
     req.displayProgress = true;
 
     b.setPostRunEvent([si](const ompl::base::PlannerPtr& planner,

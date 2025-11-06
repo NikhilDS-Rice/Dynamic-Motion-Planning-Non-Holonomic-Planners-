@@ -167,10 +167,6 @@ void ompl::control::RGRRT::computeReachableSet(Motion *motion)
 
 bool ompl::control::RGRRT::isReachableFromMotion(Motion *motion, const base::State *qrand)
 {
-    // RG-RRT rejection criterion from paper:
-    // REJECT qrand if: d(qnear, qrand) < d(r, qrand) for ALL r in R(qnear)
-    // Meaning: reject if qnear is closer to qrand than ANY of its reachable states
-    // This indicates qrand is in a region already "shadowed" by qnear
     
     // If reachable set is empty, always accept (no information to reject)
     if (motion->reachableSet.empty())
@@ -193,7 +189,7 @@ bool ompl::control::RGRRT::isReachableFromMotion(Motion *motion, const base::Sta
     }
     
     // Accept if qnear is NOT the closest (i.e., some reachable state is closer)
-    // Reject if qnear IS the closest (shadows the region)
+    // Reject if qnear is the closest (shadows the region)
     return !qnearIsClosest;
 }
 

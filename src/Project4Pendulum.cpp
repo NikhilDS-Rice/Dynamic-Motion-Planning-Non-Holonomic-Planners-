@@ -45,7 +45,7 @@ public:
         const auto *th   = cs->as<ompl::base::SO2StateSpace::StateType>(0);
         const auto *wvec = cs->as<ompl::base::RealVectorStateSpace::StateType>(1);
     
-        projection(0) = th->value;        // theta in [-pi, pi), wraps naturally
+        projection(0) = th->value;        // theta in [-pi, pi)
         projection(1) = wvec->values[0];  // omega
     }
 };
@@ -75,7 +75,7 @@ ompl::control::SimpleSetupPtr createPendulum(double torque)
     namespace ob = ompl::base;
     namespace oc = ompl::control;
 
-    // --- State space: SO2 (theta) × R^1 (omega) ---
+    // State space: SO2 (theta) × R^1 (omega) 
     auto so2   = std::make_shared<ob::SO2StateSpace>();             // wraps angle
     auto wspace= std::make_shared<ob::RealVectorStateSpace>(1);     // omega
     ob::RealVectorBounds wBounds(1);
@@ -88,14 +88,14 @@ ompl::control::SimpleSetupPtr createPendulum(double torque)
     space->addSubspace(wspace,1.0);
     space->lock();
 
-    // --- Control space: 1D torque u ∈ [-torque, torque] ---
+    // Control space: 1D torque u ∈ [-torque, torque]
     auto cspace = std::make_shared<oc::RealVectorControlSpace>(space, 1);
     ob::RealVectorBounds uBounds(1);
     uBounds.setLow (0, -torque);
     uBounds.setHigh(0,  torque);
     cspace->setBounds(uBounds);
 
-    // --- SimpleSetup + ODE propagator ---
+    // SimpleSetup + ODE propagator
     auto ss = std::make_shared<oc::SimpleSetup>(cspace);
     auto si = ss->getSpaceInformation();
     auto odeSolver = std::make_shared<oc::ODEBasicSolver<>>(si, &pendulumODE);
@@ -113,17 +113,17 @@ ompl::control::SimpleSetupPtr createPendulum(double torque)
         return std::abs(w->values[0]) <= 10.0 && si->satisfiesBounds(s);
     });
 
-    // --- Start / Goal ---
+    //Start / Goal 
     ob::ScopedState<> start(space), goal(space);
     start[0] = -M_PI/2.0;  // theta
     start[1] = 0.0;        // omega
     goal[0]  =  M_PI/2.0;  // theta
     goal[1]  =  0.0;       // omega
 
-    // Loosen goal radius (was 0.05 and too strict for τ=3)
+    // Use setStartAndGoalStates with tolerance to simplify goal region
     ss->setStartAndGoalStates(start, goal, 0.35);
 
-    // KPIECE needs a projection; keep your 2D (theta,omega) projection
+    // KPIECE needs a projection using 2D (theta, omega) projection
     space->registerDefaultProjection(std::make_shared<PendulumProjection>(space.get()));
 
     return ss;

@@ -16,19 +16,7 @@ namespace ompl
 {
     namespace control
     {
-        /**
-           @anchor cRGRRT
-           @par Short description
-           RG-RRT (Reachability-Guided RRT) is a variant of RRT that maintains
-           an approximation of the reachable set for each state in the tree.
-           When selecting which node to expand, it checks if the nearest node
-           can actually reach towards the random sample within one propagation step.
-           This helps avoid wasted expansions in kinodynamically constrained systems.
-           
-           Based on: Shkolnik, Walter, and Tedrake, "Reachability-guided sampling 
-           for planning under differential constraints," ICRA 2009.
-        */
-
+        
         /** \brief Reachability-Guided Rapidly-exploring Random Tree */
         class RGRRT : public base::Planner
         {
@@ -47,11 +35,8 @@ namespace ompl
             void clear() override;
 
             /** \brief Set the goal bias
-                In the process of randomly selecting states in the state
-                space to attempt to go towards, the algorithm may in fact
-                choose the actual goal state with some probability. This
-                probability is a real number between 0.0 and 1.0; its value
-                should usually be around 0.05 and should not be too large. */
+                This parameter controls the likelihood of the planner
+                selecting the goal state as a sample. */
             void setGoalBias(double goalBias)
             {
                 goalBias_ = goalBias;
